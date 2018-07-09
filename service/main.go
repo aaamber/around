@@ -41,8 +41,7 @@ const (
     TYPE        = "post"
     DISTANCE    = "200km"
     BT_INSTANCE = "around-post"
-    // Needs to update this URL if you deploy it to cloud.
-    ES_URL          = "http://35.237.39.190:9200"
+    ES_URL          = "http://35.196.226.182:9200/"
     ENABLE_MEMCACHE = false
     REDIS_URL       = "redis-18610.c1.us-central1-2.gce.cloud.redislabs.com:18610"
     PROJECT_ID = "long-nation-194922"
@@ -89,7 +88,7 @@ func main() {
         }
     }
     fmt.Println("Started service successfully")
-    // Here we are instantiating the gorilla/mux router
+    // instantiating the gorilla/mux router
     r := mux.NewRouter()
 
     var jwtMiddleware = jwtmiddleware.New(jwtmiddleware.Options{
@@ -153,7 +152,6 @@ func handlerSearch(w http.ResponseWriter, r *http.Request) {
     }
 
     // Define geo distance query as specified in
-    // https://www.elastic.co/guide/en/elasticsearch/reference/5.2/query-dsl-geo-distance-query.html
     q := elastic.NewGeoDistanceQuery("location")
     q = q.Distance(ran).Lat(lat).Lon(lon)
 
@@ -170,10 +168,7 @@ func handlerSearch(w http.ResponseWriter, r *http.Request) {
         http.Error(w, m, http.StatusInternalServerError)
     }
 
-    // searchResult is of type SearchResult and returns hits, suggestions,
-    // and all kinds of other information from Elasticsearch.
     fmt.Printf("Query took %d milliseconds\n", searchResult.TookInMillis)
-    // TotalHits is another convenience function that works even when something goes wrong.
     fmt.Printf("Found a total of %d post\n", searchResult.TotalHits())
 
     // Each is a convenience function that iterates over hits in a search result.
@@ -233,7 +228,7 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
     username := claims.(jwt.MapClaims)["username"]
 
     // 32 << 20 is the maxMemory param for ParseMultipartForm
-    // After you call ParseMultipartForm, the file will be saved in the server memory with maxMemory size.
+    // After call ParseMultipartForm, the file will be saved in the server memory with maxMemory size.
     // If the file size is larger than maxMemory, the rest of the data will be saved in a system temporary file.
     r.ParseMultipartForm(32 << 20)
 
