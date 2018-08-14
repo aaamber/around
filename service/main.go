@@ -7,20 +7,15 @@ import (
     "io"
     "log"
     "net/http"
-    //"os"
+    "os"
     "reflect"
     "strconv"
-    "time"
-
     elastic "gopkg.in/olivere/elastic.v3"
-
     "cloud.google.com/go/storage"
-
     "github.com/auth0/go-jwt-middleware"
     "github.com/dgrijalva/jwt-go"
     "github.com/gorilla/mux"
     "github.com/pborman/uuid"
-    "github.com/go-redis/redis"
 )
 
 type Location struct {
@@ -40,17 +35,14 @@ const (
     INDEX       = "around"
     TYPE        = "post"
     DISTANCE    = "200km"
-    BT_INSTANCE = "around-post"
     ES_URL          = "http://35.196.226.182:9200/"
-    ENABLE_MEMCACHE = false
-    REDIS_URL       = "redis-18610.c1.us-central1-2.gce.cloud.redislabs.com:18610"
-    PROJECT_ID = "long-nation-194922"
+    //PROJECT_ID = "long-nation-194922"
 )
 
 var (
     mySigningKey        = []byte("secret")
-    //GCS_BUCKET          = os.Getenv("GCS_BUCKET")
-    GCS_BUCKET          = "post-images-12345"
+    GCS_BUCKET          = os.Getenv("GCS_BUCKET")
+    //GCS_BUCKET          = "post-images-12345"
 )
 
 func main() {
@@ -125,24 +117,6 @@ func handlerSearch(w http.ResponseWriter, r *http.Request) {
         ran = val + "km"
     }
 
-    key := r.URL.Query().Get("lat") + ":" + r.URL.Query().Get("lon") + ":" + ran
-    if ENABLE_MEMCACHE {
-        rs_client := redis.NewClient(&redis.Options{
-            Addr:     REDIS_URL,
-            Password: "", // no password set
-            DB:       0,  // use default DB
-        })
-
-        val, err := rs_client.Get(key).Result()
-        if err != nil {
-            fmt.Printf("Redis cannot find the key %s as %v.\n", key, err)
-        } else {
-            fmt.Printf("Redis find the key %s.\n", key)
-            w.Write([]byte(val))
-            return
-        }
-    }
-
     // Create a client
     client, err := elastic.NewClient(elastic.SetURL(ES_URL), elastic.SetSniff(false))
     if err != nil {
@@ -171,38 +145,24 @@ func handlerSearch(w http.ResponseWriter, r *http.Request) {
     fmt.Printf("Query took %d milliseconds\n", searchResult.TookInMillis)
     fmt.Printf("Found a total of %d post\n", searchResult.TotalHits())
 
-    // Each is a convenience function that iterates over hits in a search result.
-    // It makes sure you don't need to check for nil values in the response.
-    // However, it ignores errors in serialization.
+
     var typ Post
     var ps []Post
+    // Each is a convenience function that iterates over hits in a search result.
     for _, item := range searchResult.Each(reflect.TypeOf(typ)) {
+        // cast to Post
         p := item.(Post)
         fmt.Printf("Post by %s: %s at lat %v and lon %v\n", p.User, p.Message, p.Location.Lat, p.Location.Lon)
         ps = append(ps, p)
 
     }
+    // encode json data, []byte
     js, err := json.Marshal(ps)
     if err != nil {
         m := fmt.Sprintf("Failed to parse post object %v", err)
         fmt.Println(m)
         http.Error(w, m, http.StatusInternalServerError)
         return
-    }
-
-    if ENABLE_MEMCACHE {
-        rs_client := redis.NewClient(&redis.Options{
-            Addr:     REDIS_URL,
-            Password: "", // no password set
-            DB:       0,  // use default DB
-        })
-
-        // Set the cache expiration to be 10 seconds
-        err := rs_client.Set(key, string(js), time.Second*10).Err()
-        if err != nil {
-            fmt.Printf("Redis cannot save the key %s as %v.\n", key, err)
-        }
-
     }
 
     w.Write(js)
@@ -217,6 +177,8 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    // request-scoped values, each request is a go-routine
+    // return the value associated with user
     user := r.Context().Value("user")
     if user == nil {
         m := fmt.Sprintf("Unable to find user in context")
